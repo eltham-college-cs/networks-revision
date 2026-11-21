@@ -84,16 +84,18 @@ textarea { width: 100%; min-height: 130px; font-weight: 700; line-height: 1.5; }
 <main>
   <section class="card intro">
     <h2>How this works</h2>
-    <p style="margin:6px 0 0">Seven short sections cover the whole unit, with an optional challenge at the end for anyone aiming at top marks. Answer a section, press <b>Check</b>, read the feedback, then fix anything marked wrong and check again. Your answers are saved on this computer. When you finish, show or print the summary at the bottom.</p>
+    <p style="margin:6px 0 0">Seven short sections cover the whole unit, with an optional challenge at the end for anyone aiming at top marks. Answer a section, press <b>Check</b>, read the feedback, then fix anything marked wrong and check again. Your answers are saved on this computer. When you finish, export your PDF at the bottom and attach it to this homework on Satchel One.</p>
     <label>Your name <input type="text" id="name" placeholder="First name and surname" autocomplete="off"> Form <input type="text" id="form" placeholder="8X" size="5" autocomplete="off"></label>
   </section>
   <div id="sections" style="display:grid;gap:16px"></div>
   <section class="card sum" id="summary">
-    <h2>Summary to show your teacher</h2>
+    <h2>Hand it in</h2>
     <div id="sumbody"></div>
-    <div class="acts"><button class="btn" id="print" type="button">Print or save as PDF</button><button class="btn soft" id="reset" type="button">Start again</button></div>
+    <div class="model" style="margin-top:12px"><b>How to hand in:</b> press <b>Export to PDF</b>. A PDF of your scores and written answers downloads to this device. Then open this homework in <b>Satchel One</b> and <b>attach the PDF</b> to your submission.</div>
+    <div class="acts"><button class="btn" id="export" type="button">Export to PDF</button><span class="fb" id="export-msg" role="status"></span><button class="btn soft" id="reset" type="button" style="margin-left:auto">Start again</button></div>
   </section>
 </main>
+<script src="jspdf.umd.min.js"></script>
 <script>
 (() => {
   const KEY = 'y8-networks-workbook-v2';
@@ -227,7 +229,7 @@ textarea { width: 100%; min-height: 130px; font-weight: 700; line-height: 1.5; }
     $('sumbody').innerHTML = `<p style="margin:6px 0"><b>${esc(S.name || 'Name not entered')}</b> ${esc(S.form || '')} · ${new Date().toLocaleDateString('en-GB')} · ${done} of ${CORE.length} sections checked</p>
       <table><tr><th>Section</th><th>Score</th></tr>${SEC.map((s, i) => `<tr><td>${s.bonus ? '★' : i + 1 + '.'} ${s.title}</td><td>${S.checked[s.id] ? (S.score[s.id] || 0) : '–'} / ${s.max}</td></tr>`).join('')}</table>
       <p><span class="big">${tot} / ${max}</span> &nbsp; ${tot >= 45 ? 'Excellent: you are ready for the test.' : tot >= 35 ? 'Good. Go back over any section below full marks.' : done < CORE.length ? 'Keep going: check every section.' : 'Revise your notes, then try the weaker sections again.'}</p>
-      <p class="tip">To revise further, write out from memory the definitions you got wrong in section 1.</p>`;
+      <p class="tip">Finished? Export your PDF below and attach it to this homework on Satchel One. To revise further, write out from memory the definitions you got wrong in section 1.</p>`;
   }
   function check(id) { S.checked[id] = true; S.score[id] = SCORE[id](); save(); renderSection(SEC.find(s => s.id === id)); renderTotals(); }
   // Changing an answer never changes a score by itself: the pupil has to press Check again (the exam self-mark is the exception).
@@ -252,7 +254,31 @@ textarea { width: 100%; min-height: 130px; font-weight: 700; line-height: 1.5; }
     if (t.dataset.sec === 'ex' || t.dataset.sec === 'ch') renderSection(SEC.find(s => s.id === t.dataset.sec));
   });
   box.addEventListener('input', e => { if (e.target.id === 'ex-text' || e.target.id === 'ch-text') { A(e.target.id.slice(0, 2)).text = e.target.value; save(); } });
-  $('print').addEventListener('click', () => window.print());
+  // Export a PDF of the scores and written answers, built with jsPDF (bundled with this page, so it works without other sites).
+  $('export').addEventListener('click', () => {
+    const msg = $('export-msg');
+    if (!S.name.trim()) { msg.textContent = 'Type your name at the top first.'; $('name').focus(); return; }
+    if (!window.jspdf) { msg.textContent = 'The PDF tool did not load. Reload the page and try again.'; return; }
+    const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+    const L = 18, W = 174; let y = 20;
+    const clean = s => String(s).replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[^\x20-\x7E\xA0-\xFF\n]/g, '');
+    const line = (txt, size, style, gap) => { doc.setFont('helvetica', style || 'normal'); doc.setFontSize(size);
+      doc.splitTextToSize(clean(txt), W).forEach(l => { if (y > 280) { doc.addPage(); y = 20; } doc.text(l, L, y); y += size * 0.45; }); y += gap || 0; };
+    const CORE = SEC.filter(s => !s.bonus), tot = CORE.reduce((a, s) => a + (S.score[s.id] || 0), 0), max = CORE.reduce((a, s) => a + s.max, 0);
+    line('Networks Revision Workbook', 20, 'bold', 1);
+    line('Year 8 Computing · Eltham College', 11, 'normal', 5);
+    line(`Name: ${S.name}     Form: ${S.form || '-'}     Date: ${new Date().toLocaleDateString('en-GB')}`, 12, 'bold', 5);
+    SEC.forEach((s, i) => { const sc = S.checked[s.id] ? String(S.score[s.id] || 0) : 'not checked';
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(12); doc.text(clean(`${s.bonus ? 'Challenge' : (i + 1) + '.'} ${s.bonus ? '(optional)' : s.title}`), L, y); doc.text(`${sc} / ${s.max}`, L + W, y, { align: 'right' });
+      doc.setDrawColor(200); doc.line(L, y + 2, L + W, y + 2); y += 8; });
+    y += 2; line(`Total: ${tot} / ${max}` + (S.checked.ch ? `     Challenge: ${S.score.ch || 0} / 6` : ''), 16, 'bold', 6);
+    [['ex', 'Exam practice (4 marks, self-marked)'], ['ch', 'Challenge (6 marks, self-marked)']].forEach(([id, title]) => {
+      const txt = (A(id).text || '').trim(); if (!txt && id === 'ch') return;
+      line(title, 12, 'bold', 1); line(SEC.find(s => s.id === id).how, 10, 'italic', 2); line(txt || '(no answer written)', 11, 'normal', 6); });
+    const file = 'Networks_Revision_' + (S.name.trim().replace(/[^A-Za-z0-9]+/g, '_') || 'workbook') + '.pdf';
+    doc.save(file);
+    msg.textContent = `Saved ${file}. Now attach it to this homework on Satchel One.`;
+  });
   $('reset').addEventListener('click', () => { if (!confirm('Clear all your answers and start again?')) return; try { localStorage.removeItem(KEY); } catch (e) { /* nothing saved */ } location.reload(); });
   $('theme').addEventListener('click', () => { document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; });
 })();
