@@ -91,7 +91,7 @@ textarea { width: 100%; min-height: 130px; font-weight: 700; line-height: 1.5; }
   <section class="card sum" id="summary">
     <h2>Hand it in</h2>
     <div id="sumbody"></div>
-    <div class="model" style="margin-top:12px"><b>How to hand in:</b> press <b>Export to PDF</b>. A PDF of your scores and written answers downloads to this device. Then open this homework in <b>Satchel One</b> and <b>attach the PDF</b> to your submission.</div>
+    <div class="model" style="margin-top:12px"><b>How to hand in:</b> press <b>Export to PDF</b>. A PDF of your scores and all of your answers downloads to this device. Then open this homework in <b>Satchel One</b> and <b>attach the PDF</b> to your submission.</div>
     <div class="acts"><button class="btn" id="export" type="button">Export to PDF</button><span class="fb" id="export-msg" role="status"></span><button class="btn soft" id="reset" type="button" style="margin-left:auto">Start again</button></div>
   </section>
 </main>
@@ -272,9 +272,30 @@ textarea { width: 100%; min-height: 130px; font-weight: 700; line-height: 1.5; }
       doc.setFont('helvetica', 'normal'); doc.setFontSize(12); doc.text(clean(`${s.bonus ? 'Challenge' : (i + 1) + '.'} ${s.bonus ? '(optional)' : s.title}`), L, y); doc.text(`${sc} / ${s.max}`, L + W, y, { align: 'right' });
       doc.setDrawColor(200); doc.line(L, y + 2, L + W, y + 2); y += 8; });
     y += 2; line(`Total: ${tot} / ${max}` + (S.checked.ch ? `     Challenge: ${S.score.ch || 0} / 6` : ''), 16, 'bold', 6);
-    [['ex', 'Exam practice (4 marks, self-marked)'], ['ch', 'Challenge (6 marks, self-marked)']].forEach(([id, title]) => {
+    // The pupil's own answers, question by question. Right answers are never printed, only whether each one was marked correct.
+    const head = (title) => { y += 2; if (y > 262) { doc.addPage(); y = 20; } line(title, 13, 'bold', 1); doc.setDrawColor(120); doc.line(L, y - 2, L + W, y - 2); y += 3; };
+    const row = (q, ans, ok, checked) => {
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+      const ql = doc.splitTextToSize(clean(q), 104), al = doc.splitTextToSize(clean(ans || '(no answer)'), 46), n = Math.max(ql.length, al.length);
+      if (y + n * 4.6 > 284) { doc.addPage(); y = 20; }
+      doc.text(ql, L, y); doc.setFont('helvetica', 'bold'); doc.text(al, L + 108, y);
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(checked ? (ok ? 20 : 190) : 120, checked ? (ok ? 120 : 30) : 120, checked ? (ok ? 60 : 50) : 120);
+      doc.text(checked ? (ok ? 'correct' : 'wrong') : 'not checked', L + W, y, { align: 'right' }); doc.setTextColor(0);
+      y += n * 4.6 + 1.6;
+    };
+    const opt = (list, v) => { const o = list.find(x => x[0] === v); return o ? o[1] : ''; };
+    doc.addPage(); y = 20; line('My answers', 16, 'bold', 2);
+    head('1. Key words'); defs.forEach(i => row(TERMS[i][1], A('kw')[i], A('kw')[i] === TERMS[i][0], S.checked.kw));
+    head('2. Benefit or drawback?'); BD.forEach((r, i) => row(r[0], opt([['b', 'Benefit'], ['d', 'Drawback']], A('bd')[i]), A('bd')[i] === r[1], S.checked.bd));
+    head('3. Fill the gaps'); { let g = 0, before = ''; GAPS.forEach(p => { if (typeof p === 'string') { before = p; return; } const i = g++; row('... ' + before.replace(/^[\s.,]+/, '').trim().split(' ').slice(-7).join(' ') + ' ____', A('gap')[i], A('gap')[i] === p[0], S.checked.gap); }); }
+    head('4. Firewall'); FW.forEach((r, i) => row(r[0], opt([['a', 'Allow'], ['b', 'Block']], A('fw')[i]), A('fw')[i] === r[1], S.checked.fw));
+    FWQ.forEach((q, k) => { const a = A('fw')[6 + k]; row(q.q, a === undefined ? '' : q.o[a], a === q.c, S.checked.fw); });
+    head('5. Cable, Wi-Fi or fibre?'); LINKS.forEach((r, i) => row(r[0], opt([['e', 'Ethernet'], ['w', 'Wi-Fi'], ['f', 'Fibre']], A('ln')[i]), A('ln')[i] === r[1], S.checked.ln));
+    head('6. Packets, clients and smart homes'); QUIZ.forEach((q, i) => { const a = A('qz')[i]; row(q.q, a === undefined ? '' : q.o[a], a === q.c, S.checked.qz); });
+    [['ex', '7. Exam practice (4 marks, self-marked)', EXAM], ['ch', 'Challenge (6 marks, self-marked)', CHAL]].forEach(([id, title, marks]) => {
       const txt = (A(id).text || '').trim(); if (!txt && id === 'ch') return;
-      line(title, 12, 'bold', 1); line(SEC.find(s => s.id === id).how, 10, 'italic', 2); line(txt || '(no answer written)', 11, 'normal', 6); });
+      head(title); line(SEC.find(s => s.id === id).how, 10, 'italic', 2); line(txt || '(no answer written)', 11, 'normal', 3);
+      if (S.checked[id]) { line('Marks the pupil gave themselves:', 10, 'bold', 1); marks.forEach((m, i) => line((A(id)[i] ? '[x] ' : '[  ] ') + m, 10, 'normal', 0.5)); } });
     const file = 'Networks_Revision_' + (S.name.trim().replace(/[^A-Za-z0-9]+/g, '_') || 'workbook') + '.pdf';
     doc.save(file);
     msg.textContent = `Saved ${file}. Now attach it to this homework on Satchel One.`;
